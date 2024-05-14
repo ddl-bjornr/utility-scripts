@@ -18,44 +18,43 @@ count=0
 count_uid0() {
     local file
     local count=0
-    for file in "$folder"/*; do
-        if [ $(stat -c '%u' "$file") -eq 0 ]; then
-            ((count++))
-        fi
-    done
+    count=$( find $folder -uid 0 | wc -l )
     echo "$count"
 }
 
 # Forking the count loop
 count_uid0 &
 
-# Function to change ownership of files
+# Function to change ownership of subfolders
 change_ownership() {
-    local files=("$@")
-    chown "$new_owner:$new_group" "${files[@]}"
+    local subfolders=("$@")
+    sleep 15
+    chown -R "$new_owner:$new_group" "${subfolders[@]}"
 }
 
-# Iterate through each file in the folder
-while IFS= read -r -d '' file; do
+# Iterate through each subfolder in the folder
+subfolders=()
+while IFS= read -r -d '' subfolder; do
     # Increment the count
     ((count++))
 
-    # Change ownership of the file
-    chown "$new_owner:$new_group" "$file"
-    echo "Changed ownership of $file"
+    # Add subfolder to the array
+    subfolders+=("$subfolder")
 
     # If count reaches 5000, reset count and execute chown operation
     if [ $((count % 5000)) -eq 0 ]; then
-        change_ownership "${files[@]}"
-        unset files
-    else
-        files+=("$file")
+        # Sort subfolders by length
+        sorted_subfolders=($(printf "%s\n" "${subfolders[@]}" | awk '{print length, $0}' | sort -rn | cut -d" " -f2-))
+        change_ownership "${sorted_subfolders[@]}"
+        unset subfolders
     fi
-done < <(find "$folder" -type f -print0)
+done < <(find "$folder" -type d -print0)
 
-# Change ownership of any remaining files
-if [ ${#files[@]} -gt 0 ]; then
-    change_ownership "${files[@]}"
+# Change ownership of any remaining subfolders
+if [ ${#subfolders[@]} -gt 0 ]; then
+    # Sort subfolders by length
+    sorted_subfolders=($(printf "%s\n" "${subfolders[@]}" | awk '{print length, $0}' | sort -rn | cut -d" " -f2-))
+    change_ownership "${sorted_subfolders[@]}"
 fi
 
 # Wait for the count process to finish and get the final count
